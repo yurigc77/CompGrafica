@@ -1,12 +1,6 @@
-/////////////////// PARTICULAS *************************
-#include <stdlib.h>
-#include <math.h>
 #include <GL/gl.h>
 #include "GL/glut.h"
 
-#define SENS_ROT 10.0   // Define = Valor constante em C
-#define SENS_OBS 10.0
-#define SENS_TRANS 10.0
 
 #define PASSO_TEMP 0.1  // passo de tempo para integrar ODE por Euler 
 
@@ -14,143 +8,6 @@
 #define MAXPARTICULAS  10000
 #define randomico() ((float) rand()/ RAND_MAX) //Numero aleatorio entre 0 e 1
 
-typedef struct{
-        GLfloat pos[3];
-        GLfloat vel[3];
-        GLfloat ace[3];
-        GLfloat massa;
-        GLfloat cor[3];
-        GLfloat tempoVida;
-        GLfloat transparencia;
-}part2;
-
-part2 Particulas[MAXPARTICULAS];
-
-void conceberParticulas (int i){     
-     //GLfloat r, alpha;   //Raio, Angulo
-     GLfloat alpha, beta;                              
-     GLfloat raio = 0.1 * randomico() + 0.06;
-     alpha = 2 * M_PI * randomico();
-     beta = M_PI * randomico();
-      
-     //Coordenadas do ponto de origem da particulas    
-     Particulas[i].pos[0] = -30;//rand() % 8 - 4;   // posicao em x
-     Particulas[i].pos[1] = 30;//5.0;               // posicao em y altura
-     Particulas[i].pos[2] = 0;//rand() % 2 - 2;    // posicao em z
-     
-     Particulas[i].vel[0]=  raio * cos(alpha) * sin(beta);  // velocidade em x
-     Particulas[i].vel[1]=  raio * cos(beta);               // velocidade em y
-     Particulas[i].vel[2]=  raio * sin(alpha) * sin(beta);  // velocidade em z   
-     
-     Particulas[i].ace[0] = 0.0;    // acelera em x
-     Particulas[i].ace[1] = 0.025;  // acelera em y 
-     Particulas[i].ace[2] = 0.0;    // acelera em z
-     
-     Particulas[i].massa = 0.01*randomico();  // massa da particula
-     
-     Particulas[i].cor[0] = randomico();        // R
-     Particulas[i].cor[1] = 0.1*randomico();    // G 
-     Particulas[i].cor[2] = 0.01*randomico();;  // B  
-     
-     Particulas[i].tempoVida = 0.8 + 0.98 * randomico();  // define o tempo de vida da particula
-     Particulas[i].transparencia = 1.0;                  // grau de transaperencia da particula
-}
-
-void extinguirParticulas (int i){
-     if(Particulas[i].tempoVida < 0.001){     
-        conceberParticulas(i);                            
-     } 
-}
-
-void iniciaParticulas (void){
-     int i;
-
-     for(i = 0; i< MAXPARTICULAS; i++){
-        conceberParticulas(i);
-     }
-}
-
-void desenhaParticula2(void){
-     int i;
-    
-     glDisable(GL_DEPTH_TEST);            //"Rastro"
-     glEnable(GL_BLEND);                  //Habilita a transparencia
-     glBlendFunc(GL_SRC_ALPHA, GL_ONE);   //Ativa a Transparência
-     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);    //Perspectiva    
-     
-    for(i = 0; i<MAXPARTICULAS; i++){
-        glColor4f(Particulas[i].cor[0], Particulas[i].cor[1], Particulas[i].cor[2], Particulas[i].transparencia);             
-        glPointSize(20.0);
-        glPushMatrix();
-        glBegin(GL_POINTS);
-            glVertex3f(Particulas[i].pos[0], Particulas[i].pos[1], Particulas[i].pos[2]);
-        glEnd();
-        glPopMatrix();
-             
-            // calculando EDO com Euler
-        Particulas[i].pos[0] +=  PASSO_TEMP * Particulas[i].vel[0];
-        Particulas[i].pos[1] +=  PASSO_TEMP * Particulas[i].vel[1];
-        Particulas[i].pos[2] +=  PASSO_TEMP * Particulas[i].vel[2];
-             
-        Particulas[i].vel[0] += PASSO_TEMP * Particulas[i].ace[0];
-        Particulas[i].vel[1] += PASSO_TEMP * Particulas[i].ace[1];
-        Particulas[i].vel[2] += PASSO_TEMP * Particulas[i].ace[2];
-             
-        Particulas[i].tempoVida -= 0.01;
-        Particulas[i].transparencia -= 0.01;
-        extinguirParticulas(i);
-    }
-    glDisable(GL_BLEND);
-}
-
-
-void desenhaTudo(void){
-     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-//     desenhaPlano();
-     desenhaParticula2();          
-     glutSwapBuffers();
-}
-
-void idleF (void){
-     glutPostRedisplay();
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/////////////////////////// SUPERFICIE *******************
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -179,11 +36,20 @@ void idleF (void){
 #define Translada 101
 
 #define PtsControle 19
+#define RandomPtsControle 191
+#define fogo 192
 #define BEZIER      20
 #define BSPLINE     21
 #define CATMULLROM  22
 
 #define sair 0
+
+#define local_scale 0.22   // Valor de escala para apresentar no CANVAS
+
+bool ligaParticulas=false;
+
+float ppx[121],ppy[121],ppz[121];
+
 int windW, windH; 
 int gIndVert = -1; 
 bool preenchido=0; //flag para saber se a superficie está preenchida
@@ -195,12 +61,22 @@ typedef struct st_matriz
     int n, m;
     f4d **ponto;
 } matriz;
+
+typedef struct{
+        GLfloat pos[3];
+        GLfloat vel[3];
+        GLfloat ace[3];
+        GLfloat massa;
+        GLfloat cor[3];
+        GLfloat tempoVida;
+        GLfloat transparencia;
+}part2;
  
 int comando; 
 
 int tipoView = GL_LINE_STRIP;
 
-float local_scale = 0.22f;   // Valor de escala para apresentar no CANVAS
+
 
 float VARIA = 0.1f;         // variacao do parametros Ex. t = j * VARIA para j = 0, ....< n
 
@@ -210,8 +86,23 @@ f4d matTransf[4];   // matriz transposta 4 x 4
 f4d MatBase[4];   // matriz de base 4x4
 
 f4d pView = {10.0, 10.0, -20.0, 0.0};
-    
+
 bool R=1,G=1,B=1;
+int FR=0,FG=1,FB=2;
+
+float pfx,pfy,pfz;
+
+
+part2 Particulas[MAXPARTICULAS];
+
+
+
+
+
+
+
+
+
 
 f4d vcolor[4] = {{R, G, B, 0.0},//RGB
 				 {0.0, 1.0, 0.0, 0.0},
@@ -390,7 +281,7 @@ void prod_VetMatriz(float *v, f4d **pc, f4d *vr)
 
 void ptsSuperficie(matriz *pcPatch)
 {
-    int i, j, h, n, m;
+    int i, j, h, n, m,k=0;
 	float t,s;
 	float tmp[4], vsm[4], vtm[4];
 	f4d va[4];
@@ -438,10 +329,19 @@ void ptsSuperficie(matriz *pcPatch)
 				ptsPatch->ponto[i][j][1] += va[h][1] * vtm[h];
 				ptsPatch->ponto[i][j][2] += va[h][2] * vtm[h];
 			}
+	        
+		
+			ppx[k+j]= ptsPatch->ponto[i][j][0];
+			ppy[k+j]= ptsPatch->ponto[i][j][1];
+			ppz[k+j]= ptsPatch->ponto[i][j][2];	
+	
 			t+=VARIA;
         }
+
+        k=k+11;
         s+=VARIA;
     }
+    
 }
 
 void MostrarUmPatch(int cc)
@@ -491,7 +391,6 @@ void MostrarUmPatch(int cc)
           {
               for(j = 0; j < ptsPatch->m-1; j++)
               {
-
 				a[X] = ptsPatch->ponto[i+1][j][X] - ptsPatch->ponto[i][j][X];
 				a[Y] = ptsPatch->ponto[i+1][j][Y] - ptsPatch->ponto[i][j][Y];
 				a[Z] = ptsPatch->ponto[i+1][j][Z] - ptsPatch->ponto[i][j][Z];
@@ -644,28 +543,9 @@ void DisenaSuperficie(void)
 }
 
 
-static void init(void)
-{
-   glClearColor(1.0, 1.0, 1.0, 0.0);
-   glEnable(GL_DEPTH_TEST);
-   glEnable(GL_MAP2_VERTEX_3);
-   glEnable(GL_AUTO_NORMAL);
-   glMapGrid2f(20, 0.0, 1.0, 20, 0.0, 1.0);
-}
 
-void display(void)
-{
-   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-   glPushMatrix();
 
-   if(pControle)
-   {
-	   MostrarPtosPoligControle(pControle);  // mostrando pontos de controle
-       DisenaSuperficie();                   // disenhando un objeto
-   }
-   glutSwapBuffers();
-}
 
 
 void reshape(int w, int h)
@@ -811,6 +691,51 @@ int CarregaPontos( char *arch)
 
 }
 
+int GeraPontos( char *arch)
+{
+  //int random_number = rand() % 50 + 0; 
+  FILE *fobj;
+  char token[40];
+  float px, py, pz;
+  int i, j, n, m;
+
+  printf(" \n ler  %s  \n", arch);
+
+  if((fobj=fopen(arch,"rt"))==NULL)
+  {
+     printf("Error en la apertura del archivo %s \n", arch);
+     return 0;
+  }
+
+  fgets(token, 40, fobj);
+  fscanf(fobj, "%s %d %d", token, &n, &m);
+
+  if (pControle) pControle = liberaMatriz(pControle);
+
+  pControle =AlocaMatriz(n,m);
+  
+  fscanf(fobj, "%s", token);  // leitura da linha 0
+
+  for(j=0; j<pControle->n; j++)
+  {
+    for(i=0; i<pControle->m; i++)
+	 {
+	     fscanf(fobj, "%s %f %f %f", token, &px, &py, &pz);
+
+         pControle->ponto[j][i][0] = (px+rand() % 30 +0 - (rand() % 30 +0) ) * local_scale;
+         pControle->ponto[j][i][1] = (py+rand() % 30 +0- (rand() % 30 +0) ) * local_scale;
+         pControle->ponto[j][i][2] = (pz+rand() % 30 +0- (rand() % 30 +0) ) * local_scale;
+         pControle->ponto[j][i][3] = 1.0f;
+	 }
+	fscanf(fobj, "%s", token);  // leitura da linha j+1;
+  }
+
+  // espaco de matriz para um patch
+  if(pcPatch) pcPatch = liberaMatriz(pcPatch);
+  pcPatch = AlocaMatriz(4, 4);
+
+}
+
 void processMenuEvents(int option)
 {
     MatrizIdentidade();
@@ -821,6 +746,21 @@ void processMenuEvents(int option)
     
 switch(option)
 {
+	case fogo:
+		if(ligaParticulas)
+		{
+			ligaParticulas=false;			
+		}
+		else
+		{
+			ligaParticulas=true;
+		}
+
+		break;
+	case RandomPtsControle:
+		GeraPontos("ptosControleSuperficie4x4.txt");
+		break;
+	
 	case PtsControle:
 		CarregaPontos("ptosControleSuperficie4x4.txt");
 		break;
@@ -898,15 +838,45 @@ void processColorMenuEvents(int option)//mudar a cor ---------------------
 				if(preenchido==1)
 					processMenuEvents(-2);
 				break; 
+		case 8:printf("digite uma cor:");
+			   scanf("%d%d%d",&R,&G,&B);
+			break;
 	}
 	matrizCor(R,G,B);
 	
 }
 
+void FogoColorMenuEvents(int option)//mudar a cor ---------------------
+{
+	
+	switch(option)
+	{
+		case 0:FR=0;FG=1;FB=2;
+			break;
+		case 1:FR=0;FG=1;FB=1;
+			break;
+		case 2:FR=1;FG=0;FB=1;
+			break;
+		case 3:FR=1;FG=1;FB=0;
+			break;
+		case 4:FR=0;FG=0;FB=1;
+			break;
+		case 5:FR=1;FG=0;FB=0;
+			break;
+		case 6:FR=0;FG=1;FB=0;
+			break;
+		case 7:FR=0;FG=0;FB=0;
+			break;
+		case 8:printf("digite uma cor:");
+			   scanf("%d%d%d",&FR,&FG,&FB);
+			break;
+	}
+	
+}
 
 void createGLUTMenus()
 {
-	int menu, submenu, SUBmenuTransladar, SUBmenuGirar,SUBmenuSuperficie,SUBmenuPintar,SUBmenuCores;
+	int menu, submenu, SUBmenuTransladar, SUBmenuGirar,SUBmenuSuperficie,SUBmenuPintar,SUBmenuCores,SUBmenuFogoCores;
 
     SUBmenuSuperficie = glutCreateMenu(processMenuEvents);
     glutAddMenuEntry("Bezier", BEZIER);
@@ -926,18 +896,187 @@ void createGLUTMenus()
 	glutAddMenuEntry("Ciano",5);
 	glutAddMenuEntry("Magenta",6);
 	glutAddMenuEntry("Branco",7);
+	glutAddMenuEntry("Personalizado",8);
+	
+	SUBmenuFogoCores = glutCreateMenu(FogoColorMenuEvents);//menu de core -----------------------
+	glutAddMenuEntry("Padrão",0);
+	glutAddMenuEntry("Vermelho",1);
+	glutAddMenuEntry("Verde",2);
+	glutAddMenuEntry("Azul",3);
+	glutAddMenuEntry("Amarelo",4);
+	glutAddMenuEntry("Ciano",5);
+	glutAddMenuEntry("Magenta",6);
+	glutAddMenuEntry("Branco",7);
+	glutAddMenuEntry("Personalizado",8);
 
 	menu = glutCreateMenu(processMenuEvents);
 	glutAddMenuEntry("Control Point ...", PtsControle);
+	glutAddMenuEntry("Random Control Point ...", RandomPtsControle);
+	glutAddMenuEntry("Ligar/Desligar Fogo", fogo);
 	glutAddSubMenu("Surfaces", SUBmenuSuperficie);
 	glutAddSubMenu("Objet View", SUBmenuPintar);
 	glutAddSubMenu("Cores", SUBmenuCores);
+	glutAddSubMenu("Cores do Fogo", SUBmenuFogoCores);
 	glutAddMenuEntry("Scale", Escalar);
 	glutAddMenuEntry("Rotate", RotarXYZ);
 	glutAddMenuEntry("Translate",Translada);
 	glutAddMenuEntry("Quit",sair);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
+
+
+//PARTÍCULAS===============================================================================================================================
+
+
+
+
+void conceberParticulas (int i){    
+	int random_number = rand() % 121 + 0; 
+     //GLfloat r, alpha;   //Raio, Angulo
+     GLfloat alpha, beta;                              
+     GLfloat raio = 0.1 * randomico() + 0.06;
+     alpha = 2 * M_PI * randomico();
+     beta = M_PI * randomico();
+      
+
+      
+
+      	     //Coordenadas do ponto de origem da particulas    
+     Particulas[i].pos[0] = ppx[random_number];//pfx;//rand() % 8 - 4;   // posicao em x
+     Particulas[i].pos[1] = ppy[random_number];//pfy;//5.0;               // posicao em y altura
+     Particulas[i].pos[2] = ppz[random_number];//pfz;//rand() % 2 - 2;    // posicao em z
+     
+	  
+
+     Particulas[i].vel[0]=  raio * cos(alpha) * sin(beta);  // velocidade em x
+     Particulas[i].vel[1]=  raio * cos(beta);               // velocidade em y
+     Particulas[i].vel[2]=  raio * sin(alpha) * sin(beta);  // velocidade em z   
+     
+     Particulas[i].ace[0] = 0.0;    // acelera em x
+     Particulas[i].ace[1] = 0.025;  // acelera em y 
+     Particulas[i].ace[2] = 0.0;    // acelera em z
+     
+     Particulas[i].massa = 0.01*randomico();  // massa da particula
+     
+     Particulas[i].cor[0] = randomico();        // R
+     Particulas[i].cor[1] = 0.1*randomico();    // G 
+     Particulas[i].cor[2] = 0.01*randomico();;  // B  
+     
+     Particulas[i].tempoVida = 0.8 + 0.98 * randomico();  // define o tempo de vida da particula
+     Particulas[i].transparencia = 1.0;                  // grau de transaperencia da particula
+}
+
+void extinguirParticulas (int i){
+     if(Particulas[i].tempoVida < 0.001){     
+        conceberParticulas(i);                            
+     } 
+}
+
+void iniciaParticulas (void){
+     int i=0;
+
+	   for(i; i< MAXPARTICULAS; i++)
+		{
+			if(ligaParticulas)
+			{
+				//conceberParticulas(i);
+			}
+        	
+     	}
+
+}
+/*
+void DesligaParticulas (void){
+     int i;
+
+     for(i = 0; i< MAXPARTICULAS; i++){
+        conceberParticulas(i);
+     }
+}*/
+/*
+void inicializa(void){
+     iniciaParticulas(); 
+}*/
+
+//         DESENHO
+// -------------------------
+void desenhaParticula2(void){
+     int i;
+    
+     glDisable(GL_DEPTH_TEST);            //"Rastro"
+     glEnable(GL_BLEND);                  //Habilita a transparencia
+     glBlendFunc(GL_SRC_ALPHA, GL_ONE);   //Ativa a Transparência
+     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);    //Perspectiva    
+     
+    for(i = 0; i<MAXPARTICULAS; i++){
+        glColor4f(Particulas[i].cor[FR], Particulas[i].cor[FG], Particulas[i].cor[FB], Particulas[i].transparencia);             
+        glPointSize(20.0);
+        glPushMatrix();
+        glBegin(GL_POINTS);
+            glVertex3f(Particulas[i].pos[0], Particulas[i].pos[1], Particulas[i].pos[2]);
+        glEnd();
+        glPopMatrix();
+             
+            // calculando EDO com Euler
+        Particulas[i].pos[0] +=  PASSO_TEMP * Particulas[i].vel[0];
+        Particulas[i].pos[1] +=  PASSO_TEMP * Particulas[i].vel[1];
+        Particulas[i].pos[2] +=  PASSO_TEMP * Particulas[i].vel[2];
+             
+        Particulas[i].vel[0] += PASSO_TEMP * Particulas[i].ace[0];
+        Particulas[i].vel[1] += PASSO_TEMP * Particulas[i].ace[1];
+        Particulas[i].vel[2] += PASSO_TEMP * Particulas[i].ace[2];
+             
+        Particulas[i].tempoVida -= 0.01;
+        Particulas[i].transparencia -= 0.01;
+        extinguirParticulas(i);
+    }
+    glDisable(GL_BLEND);
+}
+
+//    DESENHA TUDO  
+
+
+
+void idleF (void){
+     glutPostRedisplay();
+}
+
+
+
+static void init(void)
+{
+   glClearColor(0.0, 0.0, 0.0, 1.0);
+   glEnable(GL_DEPTH_TEST);
+   glEnable(GL_MAP2_VERTEX_3);
+   glEnable(GL_AUTO_NORMAL);
+   glMapGrid2f(20, 0.0, 1.0, 20, 0.0, 1.0);
+   //iniciaParticulas(); 
+}
+void display(void)
+{
+	 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	 if(ligaParticulas)
+	 {
+	 	desenhaParticula2();
+	 }
+         
+
+   glPushMatrix();
+
+   if(pControle)
+   {
+	   MostrarPtosPoligControle(pControle);  // mostrando pontos de controle
+       DisenaSuperficie();                   // disenhando un objeto
+   }
+   glutSwapBuffers();
+}
+
+
+
+
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -954,9 +1093,8 @@ int main(int argc, char** argv)
    glutDisplayFunc(display);
    createGLUTMenus();
    
-    glutDisplayFunc(desenhaTudo);
-        glutIdleFunc(idleF); 
-    iniciaParticulas(); 
+    glutIdleFunc(idleF);   // fun?ão de animacao
+
 
    glutMainLoop();
    return 0;
